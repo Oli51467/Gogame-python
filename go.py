@@ -6,6 +6,8 @@ WHITE_STONE = 2
 
 
 class Board:
+    P1, P2, actualPlayer, handicap = None, None, None, None
+
     def __init__(self, height, width, handicap):
         self.height = height
         self.width = width
@@ -59,7 +61,7 @@ class Board:
         new_group = Group(point, player)
         point.group = new_group
         for group in adj_groups:
-            if group.owner == player:
+            if group.owner is player:
                 new_group.add(group, point)
             else:
                 group.remove_liberties(point)
@@ -315,10 +317,9 @@ class GameRecord:
 
 
 class Stack:
-    def __init__(self, max_size=9999):
+    def __init__(self):
         self.items = []
-        self.max_size = max_size
-        self.n, self.a, self.b = 0, 0, 1
+        self.count = 0
 
     def is_empty(self):
         return self.items == []
@@ -342,16 +343,18 @@ class Stack:
         return self
 
     def __next__(self):
-        if self.n < self.max_size:
-            out = self.b
-            self.a, self.b = self.b, self.a + self.b
-            self.n = self.n + 1
-            return out
-        raise StopIteration()
+        # 获取下一个数
+        if self.count < len(self.items):
+            result = self.items[self.count]
+            self.count += 1
+            return result
+        else:
+            # 遍历结束后，抛出异常，终止遍历
+            raise StopIteration
 
 
 if __name__ == '__main__':
-    board_play = Board(19, 19, 0)
+    board_play = Board(WIDTH, WIDTH, 0)
     print("1代表黑棋 2代表白棋 输入999后退出" + "\n" + "坐标x为列 坐标y为行" + "\n" + "该黑棋下啦")
     while True:
         print('请输入x坐标')
