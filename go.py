@@ -6,8 +6,6 @@ WHITE_STONE = 2
 
 
 class Board:
-    P1, P2, actualPlayer, handicap = None, None, None, None
-
     def __init__(self, height, width, handicap):
         self.height = height
         self.width = width
@@ -55,13 +53,13 @@ class Board:
         if point.group is not None:
             return False
         captured_stones, captured_groups = None, None
-        if handle_ko:
+        if handle_ko is True:
             captured_stones, captured_groups = set(), set()
         adj_groups = point.get_adjacent_groups()
         new_group = Group(point, player)
         point.group = new_group
         for group in adj_groups:
-            if group.owner is player:
+            if id(group.owner) == id(player):
                 new_group.add(group, point)
             else:
                 group.remove_liberties(point)
@@ -71,26 +69,27 @@ class Board:
                         captured_groups.add(Group(group))
                     group.die()
 
-        if handle_ko:
-            current_turn = self.game_record.get_last_turn().to_next(point.x, point.y, player.get_identifier(),
-                                                                    captured_stones)
-            for turn in self.game_record.get_turns():
-                if turn is current_turn:
+        if handle_ko is True:
+            current_turn = self.game_record.get_last_turn().to_next(point.x, point.y, player.get_identifier(), captured_stones)
+            for i in range(0, self.game_record.get_turns().size()):
+                turn = self.game_record.get_turns().get(i)
+                if turn.override_equals(current_turn):
                     ko = True
                     break
-            if ko:
-                for chain in captured_stones:
-                    for stone in chain.stones:
+            print(ko)
+            if ko is True:
+                for chain in iter(captured_groups):
+                    for stone in iter(chain.stones):
                         stone.group = chain
-        if len(new_group.liberties) == 0 or ko:
-            for chain in point.get_adjacent_groups():
-                chain.liberites.add(point)
+        if len(new_group.liberties) == 0 or (ko is True):
+            for chain in iter(point.get_adjacent_groups()):
+                chain.liberties.add(point)
             point.group = None
             return False
 
-        for stone in new_group.stones:
+        for stone in iter(new_group.stones):
             stone.group = new_group
-        if handle_ko:
+        if handle_ko is True:
             self.game_record.apply(current_turn)
         self.recordPoints.append(point)
         return True
@@ -184,7 +183,6 @@ class Point:
             self.group = None
 
         elif len(args) == 4:
-            print(4)
             self.color = args[0]
             self.x = args[1]
             self.y = args[2]
@@ -219,6 +217,8 @@ class Point:
 
 
 class Group:
+    liberties = set()
+
     def __init__(self, *args):
         if len(args) == 1:
             self.stones = set(args[0].stones)
@@ -244,7 +244,7 @@ class Group:
         new_group.liberties.remove(played_stones)
 
     def die(self):
-        for rolling_stone in iter(self.stones):
+        for rolling_stone in self.stones:
             rolling_stone.group = None
             adjacent_groups = rolling_stone.get_adjacent_groups()
             for group in iter(adjacent_groups):
@@ -256,23 +256,86 @@ class GameTurn:
         if len(args) == 2:
             self.board_state = [[0 for _ in range(args[0] + 1)] for _ in range(args[1] + 1)]
             self.x, self.y = -1, -1
+            self.hash_code = get_deep_hash(self.board_state)
         elif len(args) == 5:
             width = len(args[0].board_state)
             height = len(args[0].board_state[0])
-            self.board_state = [[0 for _ in range(width + 1)] for _ in range(height + 1)]
-            for i in range(width):
+            self.board_state = [[0 for _ in range(width)] for _ in range(height)]
+            for i in range(1, width):
                 self.board_state[i] = copy.deepcopy(args[0].board_state[i])
             self.x, self.y = args[1], args[2]
-            if args[1] >= 0 and args[2] >= 0:
+            if args[1] > 0 and args[2] > 0:
                 self.board_state[args[1]][args[2]] = args[3]
             for point in args[4]:
                 self.board_state[point.x][point.y] = 0
+            self.hash_code = get_deep_hash(self.board_state)
 
     def to_next(self, x, y, player_id, free_points):
         return GameTurn(self, x, y, player_id, free_points)
 
     def get_board_state(self):
         return self.board_state
+
+    def override_equals(self, obj):
+        if self is obj:
+            return True
+        if obj is None or type(self) != type(obj):
+            return False
+        return self.hash_code == obj.hash_code and deep_equals(self.board_state, obj.board_state)
+
+
+def get_deep_hash(obj):
+    if obj is None:
+        return 0
+    result = 1
+    for o in obj:
+        element_hash = get_hash(o)
+        result = 31 * result + element_hash
+    return result
+
+
+def get_hash(o):
+    if o is None:
+        return 0
+    result = 1
+    for o1 in o:
+        result = 31 * result + o1
+    return result
+
+
+def deep_equals(a, b):
+    if a is b:
+        return True
+    if a is None or b is None:
+        return False
+    length = len(a)
+    if len(b) != length:
+        return False
+    for i in range(0, length):
+        e1, e2 = a[i], b[i]
+        if e1 is e2:
+            continue
+        if e1 is None:
+            return False
+        eq = deep_equals0(e1, e2)
+        if not eq:
+            return False
+    return True
+
+
+def deep_equals0(e1, e2):
+    assert e1 is not None
+    if e1 is e2:
+        return True
+    if e1 is None or e2 is None:
+        return False
+    length = len(e1)
+    if len(e2) != length:
+        return False
+    for i in range(0, length):
+        if e1[i] != e2[i]:
+            return False
+    return True
 
 
 class GameRecord:
@@ -333,6 +396,13 @@ class Stack:
     def push(self, item):
         self.items.append(item)
 
+    def get(self, pos):
+        if pos < 0 or pos >= self.size():
+            print('index out of bound')
+            raise SystemExit
+        else:
+            return self.items[pos]
+
     def pop(self):
         return self.items.pop()
 
@@ -355,14 +425,9 @@ class Stack:
 
 if __name__ == '__main__':
     board_play = Board(WIDTH, WIDTH, 0)
-    print("1代表黑棋 2代表白棋 输入999后退出" + "\n" + "坐标x为列 坐标y为行" + "\n" + "该黑棋下啦")
-    while True:
-        print('请输入x坐标')
-        index_x = int(input())
-        if index_x == 999:
-            break
-        print('请输入y坐标')
-        index_y = int(input())
+    moves = [[4, 4], [3, 4], [3, 3], [4, 3], [3, 5], [4, 5], [2, 4], [5, 4], [5, 5], [3, 4], [4, 4]]
+    for move in moves:
+        index_x, index_y = move[0], move[1]
         player_ = board_play.get_player()
         if board_play.play(index_x, index_y, player_) is True:
             print('正常落子')
