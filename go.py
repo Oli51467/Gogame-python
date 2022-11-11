@@ -7,25 +7,30 @@ BLACK_STONE = 1
 WHITE_STONE = 2
 
 
+# 棋盘类
 class Board:
     def __init__(self, height, width, handicap):
-        self.height = height
-        self.width = width
-        self.initial_handicap = handicap
-        self.points = [[Point() for _ in range(width + 1)] for _ in range(height + 1)]
-        self.game_record = GameRecord(width, height)
+        self.height = height  # 高
+        self.width = width     # 宽
+        self.initial_handicap = handicap # 初始化的让子
+        self.points = [[Point() for _ in range(width + 1)] for _ in range(height + 1)]  # 初始化每个点Point类
+        self.game_record = GameRecord(width, height)    # 棋局记录类
         self.recordPoints = []
-        self.init_board()
+        self.init_board()   # 初始化棋盘
 
     def init_board(self):
+        # 对局双方Player类
         self.P1 = Player(1)
         self.P2 = Player(2)
+        # 当前实际的Player
         self.actualPlayer = self.P1
         self.handicap = 0
+        # 初始化每个Point
         for x in range(1, self.width + 1):
             for y in range(1, self.height + 1):
                 self.points[x][y] = Point(self, x, y)
 
+    # 判断点是否在棋盘内
     def is_in_board(self, x, y):
         return 0 < x < self.width and 0 < y < self.height
 
@@ -33,12 +38,14 @@ class Board:
         x, y = point.x, point.y
         return self.is_in_board(x, y)
 
+    # 在棋盘上取得一个落子位置
     def get_point(self, x, y):
         if self.is_in_board(x, y):
             return self.points[x][y]
         else:
             return None
 
+    # 落子函数
     def play(self, x, y, player):
         point = self.get_point(x, y)
         if point is None:
@@ -46,31 +53,38 @@ class Board:
             return False
         return self.play_in_board(point, player, True)
 
+    # 落子函数 handle_ko是判断是否打劫
     def play_in_board(self, point, player, handle_ko):
         current_turn = None
         ko = False
 
         if self.point_is_in_board(point) is False:
             return False
+        # 如果该位置已经有棋子 直接返回False
         if point.group is not None:
             return False
         captured_stones, captured_groups = None, None
         if handle_ko is True:
             captured_stones, captured_groups = set(), set()
+        # 获得这个棋子周围相邻的组
         adj_groups = point.get_adjacent_groups()
         new_group = Group(point, player)
         point.group = new_group
+        # 将该棋子周围同类的组 进行连接
         for group in adj_groups:
             if id(group.owner) == id(player):
                 new_group.add(group, point)
             else:
+                # 如果该棋子周围是异类 则移出它的一口气
                 group.remove_liberties(point)
+                # 如果所有气都被移出 则被吃掉
                 if len(group.liberties) == 0:
                     if handle_ko:
                         captured_stones.update(group.stones)
                         captured_groups.add(Group(group))
+                    # 这个子连同它的组都死掉
                     group.die()
-
+        # 这段逻辑可以先跳过
         if handle_ko is True:
             current_turn = self.game_record.get_last_turn().to_next(point.x, point.y, player.get_identifier(),
                                                                     captured_stones)
@@ -97,6 +111,7 @@ class Board:
         self.recordPoints.append(point)
         return True
 
+    # 改变落子者
     def change_player(self, undo):
         if self.handicap < self.initial_handicap and undo is False:
             self.handicap += 1
@@ -110,12 +125,14 @@ class Board:
                 self.actualPlayer = self.P1
                 print('Changing player for P1')
 
+    # 移除棋盘上所有棋子的气
     def free_intersections(self):
         for i in range(1, self.width):
             for j in range(1, self.height):
                 point = self.get_point(i, j)
                 point.group = None
 
+    # 转换回合
     def take_game_turn(self, game_turn, one, two):
         self.free_intersections()
         board_state = game_turn.board_state
@@ -136,6 +153,7 @@ class Board:
     def precedent_player(self):
         self.change_player(True)
 
+    # 回退落子
     def undo(self):
         if self.game_record.has_preceding():
             self.game_record.undo()
@@ -146,6 +164,7 @@ class Board:
         else:
             return False
 
+    # 前进落子 （如果当前局面是回退回来的）
     def redo(self):
         if self.game_record.has_following():
             self.game_record.redo()
@@ -169,6 +188,7 @@ class Board:
         return string_board
 
 
+# 玩家类
 class Player:
     def __init__(self, identifier):
         self.identifier = identifier
@@ -177,7 +197,9 @@ class Player:
         return self.identifier
 
 
+# 棋盘上的点
 class Point:
+    # 两种初始化方法
     def __init__(self, *args):
         if len(args) == 3:
             self.board = args[0]
@@ -205,6 +227,7 @@ class Point:
 
         return adjacent_groups
 
+    # 拿到相邻棋子周围空的组（气）
     def get_empty_groups(self):
         empty_groups = []
         dx, dy = [-1, 0, 1, 0], [0, 1, 0, -1]
@@ -219,9 +242,11 @@ class Point:
         return empty_groups
 
 
+# 组(气)
 class Group:
     liberties = set()
 
+    # 三种初始化方法
     def __init__(self, *args):
         if len(args) == 1:
             self.stones = set(args[0].stones)
@@ -242,10 +267,12 @@ class Group:
         self.liberties.update(group.liberties)
         self.liberties.remove(played_stones)
 
+    # 移除一个组的所有气
     def remove_liberties(self, played_stones):
         new_group = Group(self.stones, self.liberties, self.owner)
         new_group.liberties.remove(played_stones)
 
+    # 一个组死掉
     def die(self):
         for rolling_stone in self.stones:
             rolling_stone.group = None
@@ -254,6 +281,7 @@ class Group:
                 group.liberties.add(rolling_stone)
 
 
+# 记录每个回合
 class GameTurn:
     def __init__(self, *args):
         if len(args) == 2:
@@ -279,6 +307,7 @@ class GameTurn:
     def get_board_state(self):
         return self.board_state
 
+    # hash + deepEquals判断棋盘局面是否相同
     def override_equals(self, obj):
         if self is obj:
             return True
@@ -287,6 +316,7 @@ class GameTurn:
         return self.hash_code == obj.hash_code and deep_equals(self.board_state, obj.board_state)
 
 
+# 记录类 维护每个回合的栈
 class GameRecord:
     def __init__(self, width, height):
         self.preceding = Stack()
@@ -328,6 +358,7 @@ class GameRecord:
         return self.preceding.size()
 
 
+# 自定义栈
 class Stack:
     def __init__(self):
         self.items = []
@@ -372,6 +403,7 @@ class Stack:
             raise StopIteration
 
 
+# test
 if __name__ == '__main__':
     board_play = Board(WIDTH, WIDTH, 0)
     moves = [[4, 4], [3, 4], [3, 3], [4, 3], [3, 5], [4, 5], [2, 4], [5, 4], [5, 5], [3, 4], [4, 4]]
